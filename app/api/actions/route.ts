@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { executeAppiumAction } from "@/lib/appium";
 import { ActionPayload } from "@/types/fleet";
 
@@ -14,7 +14,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { data: fleet, error } = await supabaseAdmin
+  const db = getSupabaseAdmin();
+
+  const { data: fleet, error } = await db
     .from("fleets")
     .select("*")
     .eq("id", fleet_id)
@@ -24,16 +26,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Fleet not found" }, { status: 404 });
   }
 
-  // Mark device as Busy while action runs
-  await supabaseAdmin
+  await db
     .from("fleets")
     .update({ status: "Busy", updated_at: new Date().toISOString() })
     .eq("id", fleet_id);
 
   const result = await executeAppiumAction(fleet, action, params);
 
-  // Restore status after action
-  await supabaseAdmin
+  await db
     .from("fleets")
     .update({
       status: result.success ? "Online" : "Offline",

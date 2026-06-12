@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export async function GET() {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from("fleets")
     .select("*")
     .order("created_at", { ascending: false });
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from("fleets")
     .insert({
       device_name,

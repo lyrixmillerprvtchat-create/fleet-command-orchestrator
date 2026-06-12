@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 export async function PATCH(
   req: NextRequest,
@@ -7,7 +7,7 @@ export async function PATCH(
 ) {
   const body = await req.json();
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await getSupabaseAdmin()
     .from("fleets")
     .update({ ...body, updated_at: new Date().toISOString() })
     .eq("id", params.id)
@@ -22,7 +22,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await supabaseAdmin
+  const { error } = await getSupabaseAdmin()
     .from("fleets")
     .delete()
     .eq("id", params.id);
