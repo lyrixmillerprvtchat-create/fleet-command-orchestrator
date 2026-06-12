@@ -12,7 +12,11 @@ export async function GET(req: Request) {
   }
 
   const client = new Client({
-    connectionString: process.env.DATABASE_URL,
+    host: "aws-0-us-east-1.pooler.supabase.com",
+    port: 6543,
+    database: "postgres",
+    user: "postgres.epdzbjsecfsyfhknfbca",
+    password: process.env.SUPABASE_DB_PASSWORD,
     ssl: { rejectUnauthorized: false },
   });
 
@@ -56,7 +60,7 @@ export async function GET(req: Request) {
     await client.query(`
       DO $$ BEGIN
         IF NOT EXISTS (
-          SELECT 1 FROM pg_policies WHERE tablename = 'fleets' AND policyname = 'service_role_all'
+          SELECT 1 FROM pg_policies WHERE tablename='fleets' AND policyname='service_role_all'
         ) THEN
           CREATE POLICY "service_role_all" ON fleets FOR ALL USING (true);
         END IF;
@@ -69,14 +73,11 @@ export async function GET(req: Request) {
     if (rows[0].count === 0) {
       await client.query(`
         INSERT INTO fleets (device_name, api_url, status, tags)
-        VALUES ('Demo-Android-VM-01', 'https://hub-cloud.browserstack.com/wd/hub', 'Offline', ARRAY['Bot','Browser'])
+        VALUES ('Demo-Android-VM-01','https://hub-cloud.browserstack.com/wd/hub','Offline',ARRAY['Bot','Browser'])
       `);
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Fleet database initialized",
-    });
+    return NextResponse.json({ success: true, message: "Fleet database initialized" });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });
