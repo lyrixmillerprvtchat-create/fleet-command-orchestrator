@@ -1,45 +1,89 @@
 /**
- * WebdriverIO config — routes traffic through Fleet Command Orchestrator proxy.
+ * Fleet Command Orchestrator — Dispatch API example
  *
- * The proxy injects your BrowserStack/LambdaTest Access Key server-side.
- * Your local script never needs credentials; it only needs the node UUID.
+ * Instead of a WebDriver proxy, the orchestrator runs an autonomous AI agent
+ * that controls the device based on a natural language goal.
+ *
+ * Flow:
+ *   POST /api/dispatch  →  Claude (Opus 4.8 vision) takes screenshots,
+ *                          plans actions, and executes them via Appium
+ *                          until the goal is achieved or 20 iterations pass.
+ *
+ * Response: Server-Sent Events (SSE) stream — one JSON event per line.
  *
  * Usage:
- *   1. Copy this file to wdio.conf.js in your test project.
- *   2. Set NODE_ID to the fleet node's UUID (visible in the dashboard).
- *   3. Run: npx wdio run wdio.conf.js
+ *   1. Find the fleet node UUID in the dashboard.
+ *   2. POST to /api/dispatch with the node ID and your goal.
+ *   3. Consume the SSE stream to follow progress in real time.
  */
 
+const ORCHESTRATOR = "https://fleet-command-orchestrator.vercel.app";
 const NODE_ID = process.env.FLEET_NODE_ID || "your-fleet-node-uuid-here";
-const ORCHESTRATOR_HOST = "fleet-command-orchestrator.vercel.app";
 
-exports.config = {
-  protocol: "https",
-  hostname: ORCHESTRATOR_HOST,
-  port: 443,
-  path: `/api/proxy/${NODE_ID}`,
+// --- Minimal Node.js fetch example ---
 
-  capabilities: [
-    {
-      platformName: "Android",
-      "appium:deviceName": "Samsung Galaxy S22",
-      "appium:platformVersion": "12.0",
-      // For BrowserStack: "appium:app": "bs://your-app-hash"
-      // For LambdaTest:   "appium:app": "lt://your-app-hash"
-      "appium:automationName": "UiAutomator2",
-    },
-  ],
+async function runGoal(goal, capabilities) {
+  const res = await fetch(`${ORCHESTRATOR}/api/dispatch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      nodeId: NODE_ID,
+      natural_language_goal: goal,
+      // Optional: override Appium session capabilities
+      capabilities: capabilities ?? {
+        platformName: "Android",
+        "appium:automationName": "UiAutomator2",
+        "appium:deviceName": "Samsung Galaxy S22",
+        "appium:platformVersion": "12.0",
+        // "appium:app": "bs://your-bs-app-hash",
+      },
+    }),
+  });
 
-  framework: "mocha",
-  reporters: ["spec"],
+  if (!res.ok || !res.body) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(`Dispatch failed: ${err.error}`);
+  }
 
-  mochaOpts: {
-    ui: "bdd",
-    timeout: 120000,
-  },
+  // Parse SSE stream line by line
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
 
-  // Session commands are automatically routed to the same remote session:
-  // POST /api/proxy/{nodeId}/session          → creates session, returns { sessionId }
-  // POST /api/proxy/{nodeId}/session/{id}/url → proxy forwards to same provider session
-  // The sessionId lives in the URL path, so no extra sticky-session logic is needed.
-};
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const event = JSON.parse(line.slice(6));
+      handleEvent(event);
+    }
+  }
+}
+
+function handleEvent(event) {
+  switch (event.type) {
+    case "session_created":
+      console.log(`[session] ${event.sessionId}`);
+      break;
+    case "step":
+      console.log(`[step ${event.iteration}] ${event.decision.reasoning}`);
+      console.log(`  → action: ${event.decision.action.type}`);
+      break;
+    case "action_result":
+      console.log(`  result: ${event.success ? "✓" : "✗"} ${event.message}`);
+      break;
+    case "complete":
+      console.log(`[done in ${event.iterations} steps] ${event.result}`);
+      break;
+    case "error":
+      console.error(`[error] ${event.message}`);
+      break;
+  }
+}
+
+// Example run
+runGoal("Open the Settings app and enable Dark Mode").catch(console.error);
