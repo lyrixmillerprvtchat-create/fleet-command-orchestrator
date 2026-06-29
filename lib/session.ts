@@ -19,6 +19,13 @@ export function createSessionToken(fleetId: string): {
   return { token: `${body}.${sig}`, sessionId };
 }
 
+export function createTokenForSession(sessionId: string, fleetId: string): string {
+  const exp = Math.floor(Date.now() / 1000) + 86400;
+  const body = `${sessionId}.${fleetId}.${exp}`;
+  const sig = createHmac("sha256", SECRET).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
 export function verifySessionToken(token: string): SessionPayload | null {
   try {
     const parts = token.split(".");
