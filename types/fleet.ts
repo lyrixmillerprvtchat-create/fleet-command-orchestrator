@@ -27,3 +27,14 @@ export interface ActionResult {
   message: string;
   data?: unknown;
 }
+
+export type SessionStatus = "pending" | "active" | "reconnecting" | "closed";
+
+export interface FleetSession {
+  id: string;
+  fleet_id: string;
+  status: SessionStatus;
+  created_at: string;
+  expires_at: string;
+  last_seen_at: string;
+}

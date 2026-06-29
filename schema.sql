@@ -44,3 +44,40 @@ VALUES (
   'Offline',
   ARRAY['Bot', 'Browser']
 );
+
+-- ─── Persistent Remote Desktop Sessions ──────────────────────────────────────
+
+CREATE TABLE sessions (
+  id           UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  fleet_id     UUID REFERENCES fleets(id) ON DELETE CASCADE,
+  status       TEXT NOT NULL DEFAULT 'pending'
+                 CHECK (status IN ('pending', 'active', 'reconnecting', 'closed')),
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ DEFAULT NOW() + INTERVAL '24 hours',
+  last_seen_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_sessions_fleet ON sessions(fleet_id);
+CREATE INDEX idx_sessions_status ON sessions(status);
+
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all" ON sessions FOR ALL USING (true);
+
+-- ─── WebRTC Signaling Messages ────────────────────────────────────────────────
+
+CREATE TABLE signals (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL CHECK (type IN ('offer', 'answer', 'ice-candidate')),
+  origin     TEXT NOT NULL CHECK (origin IN ('host', 'client')),
+  payload    JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_signals_session ON signals(session_id, type, origin);
+
+ALTER TABLE signals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all" ON signals FOR ALL USING (true);
+
+-- Auto-expire sessions older than 24h (run as a scheduled job or pg_cron)
+-- DELETE FROM sessions WHERE expires_at < NOW();

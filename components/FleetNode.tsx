@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Fleet, FleetAction } from "@/types/fleet";
+import RemoteDesktopView from "./RemoteDesktopView";
 
 const STATUS_STYLES: Record<Fleet["status"], string> = {
   Online: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -31,6 +32,7 @@ interface Props {
 export default function FleetNode({ fleet, onDelete, onStatusChange }: Props) {
   const [loading, setLoading] = useState<FleetAction | null>(null);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [showDesktop, setShowDesktop] = useState(false);
 
   async function runAction(action: FleetAction) {
     setLoading(action);
@@ -116,13 +118,30 @@ export default function FleetNode({ fleet, onDelete, onStatusChange }: Props) {
         </p>
       )}
 
-      {/* Delete */}
-      <button
-        onClick={handleDelete}
-        className="text-xs text-slate-600 hover:text-red-400 transition-colors self-end"
-      >
-        Remove node
-      </button>
+      {/* Connect + Delete */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setShowDesktop(true)}
+          disabled={fleet.status === "Offline"}
+          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/40 text-sky-400 border border-sky-500/30 hover:border-sky-500/60 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <span>⬡</span>
+          Remote View
+        </button>
+        <button
+          onClick={handleDelete}
+          className="text-xs text-slate-600 hover:text-red-400 transition-colors"
+        >
+          Remove node
+        </button>
+      </div>
+
+      {showDesktop && (
+        <RemoteDesktopView
+          fleet={fleet}
+          onClose={() => setShowDesktop(false)}
+        />
+      )}
     </div>
   );
 }
